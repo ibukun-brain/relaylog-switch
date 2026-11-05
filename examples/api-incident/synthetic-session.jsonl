@@ -1,0 +1,15 @@
+{"spool_offset":4,"record":{"type":"shell","event":{"type":"started","command":"curl -sS -o /dev/null -w '%{http_code}' http://inventory-api.example.test/health","cwd":"/srv/inventory-api","shell_depth":1,"command_text_scope":"first_simple_command"}}}
+{"spool_offset":64,"record":{"type":"shell","event":{"type":"finished","exit_code":0,"cwd":"/srv/inventory-api","duration_millis":18}}}
+{"spool_offset":128,"record":{"type":"shell","event":{"type":"started","command":"docker ps --filter name=inventory-api --format '{{.Names}} {{.Status}}'","cwd":"/srv/inventory-api","shell_depth":1,"command_text_scope":"first_simple_command"}}}
+{"spool_offset":192,"record":{"type":"shell","event":{"type":"finished","exit_code":0,"cwd":"/srv/inventory-api","duration_millis":11}}}
+{"spool_offset":256,"record":{"type":"shell","event":{"type":"started","command":"docker logs inventory-api --tail 25","cwd":"/srv/inventory-api","shell_depth":1,"command_text_scope":"first_simple_command"}}}
+{"spool_offset":320,"record":{"type":"shell","event":{"type":"finished","exit_code":0,"cwd":"/srv/inventory-api","duration_millis":9}}}
+{"spool_offset":384,"record":{"type":"shell","event":{"type":"started","command":"pg_isready -h db.example.test -p 5432 -U inventory_app","cwd":"/srv/inventory-api","shell_depth":1,"command_text_scope":"first_simple_command"}}}
+{"spool_offset":448,"record":{"type":"shell","event":{"type":"finished","exit_code":0,"cwd":"/srv/inventory-api","duration_millis":14}}}
+{"spool_offset":512,"record":{"type":"redaction","enabled":true}}
+{"spool_offset":576,"record":{"type":"redaction","enabled":false}}
+{"spool_offset":640,"record":{"type":"shell","event":{"type":"started","command":"docker restart inventory-api","cwd":"/srv/inventory-api","shell_depth":1,"command_text_scope":"first_simple_command"}}}
+{"spool_offset":704,"record":{"type":"shell","event":{"type":"finished","exit_code":0,"cwd":"/srv/inventory-api","duration_millis":83}}}
+{"spool_offset":768,"record":{"type":"shell","event":{"type":"started","command":"curl -sS -o /dev/null -w '%{http_code}' http://inventory-api.example.test/health","cwd":"/srv/inventory-api","shell_depth":1,"command_text_scope":"first_simple_command"}}}
+{"spool_offset":832,"record":{"type":"shell","event":{"type":"finished","exit_code":0,"cwd":"/srv/inventory-api","duration_millis":16}}}
+{"type":"capture_gaps","counts":{"queue_dropped_records":0,"capacity_dropped_records":0},"truncated_at":null}

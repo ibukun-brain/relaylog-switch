@@ -1,0 +1,11 @@
+/target/
+/evidence/
+/private-evidence/
+/.env
+/.env.*
+!/.env.example
+*.pem
+*.key
+*.log
+*.bin
+*.profraw

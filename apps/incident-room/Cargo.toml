@@ -1,0 +1,15 @@
+[package]
+name = "incident-room"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+description = "Evidence inspection CLI for Relaylog Switch workflows"
+
+[dependencies]
+clap.workspace = true
+relaylog-switch = { path = "../../crates/relaylog-switch" }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
