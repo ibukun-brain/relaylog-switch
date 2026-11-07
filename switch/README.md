@@ -1,5 +1,38 @@
 # Switch Setup
 
+## Import into Switch Console
+
+Use the importable agent template at
+[`templates/relaylog-ai-investigator.template.yaml`](templates/relaylog-ai-investigator.template.yaml).
+In Switch Console, open **Templates**, choose **Import template**, and select
+that YAML file. Then use the imported template and set:
+
+1. **Provider** to Codex.
+2. **Location** to the machine where the Codex provider can run the adapter.
+3. **Working directory** to this repository on that machine.
+4. **Existing Switch room** to the room bridged to your Discord incident
+   channel.
+5. Keep the suggested agent name `relaylogaiagent-v2`, or choose another
+   unused name.
+
+The template creates a new agent and adds it to the selected room. It does not
+rewrite the existing `relaylogAIagent`. After confirming the new agent works,
+remove the old agent from that room or direct mentions to the new agent so the
+stale instructions are no longer used. If you want to keep the original name,
+rename or remove the old agent in Switch Console before using the template.
+
+The working directory and Relaylog session must be reachable from the selected
+agent runtime. A Windows-hosted provider does not automatically get access to
+Linux paths such as `/home/...` in WSL. If the provider cannot run the adapter
+in that WSL distribution, run the approved adapter command in WSL and attach
+its JSON bundle to the room. The template does not grant access to Relaylog's
+encrypted spool or upload evidence itself.
+
+The template follows Switch's YAML template format and creates an agent that
+joins an existing room; it does not create a separate Discord bot or room. See
+the [Switch template language reference](https://github.com/sandbox-quantum/switch/blob/main/docs/TEMPLATES.md)
+for the supported template fields.
+
 ## Integration approach
 
 Use an existing coding agent that Switch Console already supports. The agent
@@ -17,13 +50,13 @@ avoids that custom-client path; see the [official protocol
 docs](https://docs.switchagents.ai/switch-rooms/internals/agent-protocol) if a
 future implementation needs one.
 
-## Manual setup
+## Manual setup without importing the template
 
 1. Install Switch Console and follow the
    [Switch quickstart](https://docs.switchagents.ai/switch-rooms/getting-started)
    to connect an existing coding-agent provider.
-2. Add an agent in Switch Console. Set its run location to the computer with
-   this checkout, and set its working directory to the repository root.
+2. Add or edit an agent in Switch Console. Set its run location to the computer
+   with this checkout, and set its working directory to the repository root.
 3. Use [`agents/incident-investigator.md`](agents/incident-investigator.md) as
    its instructions. The agent needs permission to run Cargo in this directory.
 4. Create or choose a Switch room and include the human operator and agent.
