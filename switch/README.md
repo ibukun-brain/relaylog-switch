@@ -34,17 +34,23 @@ future implementation needs one.
    Discuss attribution and limitations with the human. The events are
    synthetic replay, not captured Codex activity.
 6. For a real session, the agent must ask for session-specific approval first.
-   After approval, it can run
-   `cargo run -p incident-room -- investigate --session <directory> --authorize-sharing`.
-   This prints the prepared JSON into the agent's local execution context; it
-   does not send it to an external service through this application. If Relaylog
-   needs an interactive passphrase, have the operator export JSONL locally and
-   use `incident-room inspect --jsonl <file> --authorize-sharing` instead.
+   After approval, run `cargo run -p incident-room -- investigate --session
+   <directory> --authorize-sharing`. If the Relaylog binary is a local build
+   outside `PATH`, add `--relaylog-bin <executable>`. The equivalent guarded
+   Make target, run from this checkout inside WSL, is
+   `make investigate RELAYLOG=<relaylog-binary> SESSION_DIR=<session-directory>
+   AUTHORIZE_SHARING=yes`. This prints the prepared metadata JSON into the
+   agent's local execution context; it does not send it to an external service
+   through this application. If Relaylog needs an interactive passphrase, have
+   the operator export JSONL locally and use
+   `incident-room inspect --jsonl <file> --authorize-sharing` instead.
 7. Ask the agent to inspect `timeline`, `agent_evidence_schema_versions`, and
-   `limitations`. Every factual claim should cite an `offset-N` reference.
-   Legacy shell events remain actor-unknown; only explicit v1 actor metadata
-   can support AI or human attribution. Do not infer identity from the Switch
-   agent that ran the CLI.
+   `limitations`, `capture_gaps`, and `capture_coverage`. State the coverage
+   status and whether completeness is verified; a clear drop-counter footer
+   alone is not proof of completeness. Every factual claim should cite an
+   `offset-N` reference. Legacy shell events remain actor-unknown; only
+   explicit actor metadata can support AI or human attribution. Do not infer
+   identity from the Switch agent that ran the CLI.
 8. Keep reports as drafts. Separate observed events from operator-reported
    context and model-generated inference; do not claim a human reviewed or
    approved a change unless a source event says so.
@@ -60,6 +66,13 @@ The CLI flag is an explicit consent step, not an authentication mechanism. A
 Switch-connected agent must still wait for the operator's approval before
 running it on a real session. Never enable terminal-output sharing without a
 separate approval.
+
+Do not invoke `relaylog-switch inspect-session`; that command does not exist.
+The supported session path is `incident-room investigate`, with optional
+`--relaylog-bin`, or the guarded `make investigate` target. A Switch agent only
+has access to local files when its configured runner can reach that machine
+and filesystem. For a WSL session, attach the operator-generated JSON bundle
+to the room if the agent runs outside that WSL environment.
 
 ## Verification status
 
