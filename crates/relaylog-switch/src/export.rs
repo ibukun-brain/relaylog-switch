@@ -10,6 +10,9 @@ use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_json::{Map, Value};
 
+use crate::agent_evidence::{
+    AGENT_EVIDENCE_SCHEMA_VERSION, AgentEventType, AgentEvidenceEvent, UnsupportedAgentEvidence,
+};
 use crate::error::ExportError;
 use crate::evidence::{self, CaptureRecord, ExportedSession};
 
@@ -28,6 +31,7 @@ pub fn load_jsonl<R: BufRead>(mut reader: R) -> Result<ExportedSession, ExportEr
     let mut bytes_read = 0usize;
     let mut line_number = 0usize;
     let mut previous_offset = None;
+    let mut session_id: Option<String> = None;
     let mut gaps = None;
 
     loop {
@@ -97,23 +101,28 @@ pub fn load_jsonl<R: BufRead>(mut reader: R) -> Result<ExportedSession, ExportEr
             .get("record")
             .and_then(Value::as_object)
             .ok_or(ExportError::InvalidRecord { line: line_number })?;
-        records.push(evidence::make_record(
-            spool_offset,
-            parse_record(raw_record, line_number)?,
-        ));
+        let record = parse_record(raw_record, line_number)?;
+        let record_session_id = match &record {
+            CaptureRecord::Agent { session_id, .. }
+            | CaptureRecord::AgentUnsupported { session_id, .. } => Some(session_id),
+            _ => None,
+        };
+        if let Some(record_session_id) = record_session_id {
+            if session_id
+                .as_deref()
+                .is_some_and(|existing| existing != record_session_id)
+            {
+                return Err(ExportError::MixedSessions { line: line_number });
+            }
+            session_id = Some(record_session_id.clone());
+        }
+        records.push(evidence::make_record(spool_offset, record));
     }
 
     let gaps = gaps.ok_or(ExportError::MissingCaptureGaps {
         after_line: line_number,
     })?;
-    if gaps.queue_dropped_records() != 0
-        || gaps.capacity_dropped_records() != 0
-        || gaps.truncated_at().is_some()
-    {
-        return Err(ExportError::EvidenceLoss);
-    }
-
-    Ok(evidence::make_session(records, gaps))
+    Ok(evidence::make_session(records, gaps, session_id))
 }
 
 /// Invokes `relaylog export <session-directory>` without a shell.
@@ -122,6 +131,17 @@ pub fn load_jsonl<R: BufRead>(mut reader: R) -> Result<ExportedSession, ExportEr
 /// Relaylog. Export stderr is drained but never returned or logged.
 pub fn load_relaylog_session(session_directory: &Path) -> Result<ExportedSession, ExportError> {
     run_export(OsStr::new("relaylog"), session_directory)
+}
+
+/// Invokes an explicitly configured Relaylog executable without a shell.
+///
+/// This supports local builds that are not installed on `PATH`, such as a
+/// Relaylog binary under Cargo's `target/debug` directory.
+pub fn load_relaylog_session_with_executable(
+    executable: &Path,
+    session_directory: &Path,
+) -> Result<ExportedSession, ExportError> {
+    run_export(executable.as_os_str(), session_directory)
 }
 
 fn run_export(
@@ -230,6 +250,7 @@ fn parse_record(object: &Map<String, Value>, line: usize) -> Result<CaptureRecor
         "shell" => &["type", "event"],
         "origin" => &["type", "value", "source"],
         "redaction" => &["type", "enabled"],
+        "agent" => &["type", "session_id", "evidence"],
         _ => {
             return Ok(CaptureRecord::Unknown {
                 record_type: record_type.to_owned(),
@@ -263,8 +284,64 @@ fn parse_record(object: &Map<String, Value>, line: usize) -> Result<CaptureRecor
                 .and_then(Value::as_bool)
                 .ok_or(ExportError::InvalidRecord { line })?,
         }),
+        "agent" => parse_agent_record(object, line),
         _ => Err(ExportError::InvalidRecord { line }),
     }
+}
+
+fn parse_agent_record(
+    object: &Map<String, Value>,
+    line: usize,
+) -> Result<CaptureRecord, ExportError> {
+    let session_id = get_string(object, "session_id", line)?;
+    if !valid_relaylog_session_id(&session_id) {
+        return Err(ExportError::InvalidRecord { line });
+    }
+    let payload = object
+        .get("evidence")
+        .and_then(Value::as_object)
+        .ok_or(ExportError::InvalidRecord { line })?;
+    let schema_version = payload
+        .get("schema_version")
+        .and_then(Value::as_u64)
+        .ok_or(ExportError::InvalidRecord { line })?;
+    if schema_version != u64::from(AGENT_EVIDENCE_SCHEMA_VERSION) {
+        return Ok(CaptureRecord::AgentUnsupported {
+            session_id,
+            reason: UnsupportedAgentEvidence::SchemaVersion(schema_version),
+        });
+    }
+    let event_type = payload
+        .get("event_type")
+        .and_then(Value::as_str)
+        .ok_or(ExportError::InvalidRecord { line })?;
+    if AgentEventType::parse(event_type).is_none() {
+        return Ok(CaptureRecord::AgentUnsupported {
+            session_id,
+            reason: UnsupportedAgentEvidence::EventType,
+        });
+    }
+
+    let evidence: AgentEvidenceEvent = serde_json::from_value(Value::Object(payload.clone()))
+        .map_err(|_| ExportError::InvalidRecord { line })?;
+    if !evidence.is_valid() {
+        return Err(ExportError::InvalidRecord { line });
+    }
+    Ok(CaptureRecord::Agent {
+        session_id,
+        evidence: Box::new(evidence),
+    })
+}
+
+fn valid_relaylog_session_id(value: &str) -> bool {
+    value.len() == 36
+        && value.bytes().enumerate().all(|(index, byte)| {
+            if matches!(index, 8 | 13 | 18 | 23) {
+                byte == b'-'
+            } else {
+                byte.is_ascii_hexdigit()
+            }
+        })
 }
 
 fn has_exact_keys(object: &Map<String, Value>, expected: &[&str]) -> bool {
@@ -435,11 +512,36 @@ mod tests {
     }
 
     #[test]
+    fn configured_relaylog_executable_receives_session_path_as_one_argument() {
+        let executable = temporary_path("configured-relaylog");
+        fs::write(
+            &executable,
+            "#!/bin/sh\n[ \"$1\" = export ] || exit 3\n[ \"$2\" = '/fictional/session with space' ] || exit 4\nprintf '%s\\n' '{\"type\":\"capture_gaps\",\"counts\":{\"queue_dropped_records\":0,\"capacity_dropped_records\":0},\"truncated_at\":null}'\n",
+        )
+        .expect("write synthetic command");
+        let mut permissions = fs::metadata(&executable)
+            .expect("read synthetic command metadata")
+            .permissions();
+        permissions.set_mode(0o700);
+        fs::set_permissions(&executable, permissions).expect("make command executable");
+
+        let session = load_relaylog_session_with_executable(
+            &executable,
+            Path::new("/fictional/session with space"),
+        )
+        .expect("configured executable should return a validated export");
+        let _ = fs::remove_file(executable);
+
+        assert!(session.records().is_empty());
+        assert_eq!(session.capture_gaps().queue_dropped_records(), 0);
+    }
+
+    #[test]
     fn failed_export_does_not_return_stderr_content() {
         let executable = temporary_path("failed-relaylog");
         fs::write(
             &executable,
-            "#!/bin/sh\nprintf 'sensitive command text' >&2\nexit 9\n",
+            "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"capture_gaps\",\"counts\":{\"queue_dropped_records\":0,\"capacity_dropped_records\":0},\"truncated_at\":null}'\nprintf 'sensitive command text' >&2\nexit 9\n",
         )
         .expect("write synthetic command");
         let mut permissions = fs::metadata(&executable)

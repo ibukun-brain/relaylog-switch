@@ -14,7 +14,9 @@ pub enum ExportError {
     #[error("could not start the Relaylog CLI")]
     Start(#[source] io::Error),
     /// The Relaylog executable is missing from the process search path.
-    #[error("Relaylog CLI was not found; install it or provide JSONL with --jsonl")]
+    #[error(
+        "Relaylog CLI was not found; put it on PATH, pass --relaylog-bin, or provide JSONL with --jsonl"
+    )]
     MissingExecutable,
     /// The Relaylog export process returned a nonzero exit status.
     #[error("Relaylog export failed with status {0}")]
@@ -48,9 +50,6 @@ pub enum ExportError {
         /// One-based line number.
         line: usize,
     },
-    /// A capture-gap summary reported loss or truncation.
-    #[error("Relaylog export reports missing or truncated evidence")]
-    EvidenceLoss,
     /// The JSONL reader did not find the required final summary.
     #[error("Relaylog export ended after line {after_line} without a capture-gap summary")]
     MissingCaptureGaps {
@@ -72,6 +71,12 @@ pub enum ExportError {
         previous: u64,
         /// Current spool offset.
         offset: u64,
+    },
+    /// Agent records in one export identify different Relaylog sessions.
+    #[error("Relaylog export contains multiple recording sessions at line {line}")]
+    MixedSessions {
+        /// One-based line where the conflicting session was found.
+        line: usize,
     },
     /// A line exceeded the parser's line bound.
     #[error("Relaylog export line {line} exceeds the supported size limit")]
@@ -99,12 +104,6 @@ pub enum PrivacyError {
     /// The export ended while private mode was still active.
     #[error("the export ends inside a private interval; no evidence was prepared")]
     UnclosedPrivateBoundary,
-    /// An event type is not recognized well enough to share safely.
-    #[error("unknown event type at evidence {evidence_id}; no evidence was prepared")]
-    UnknownEvent {
-        /// Local evidence reference (a spool offset, not a global event ID).
-        evidence_id: String,
-    },
     /// Explicitly approved output exceeded the output limit.
     #[error("approved terminal output exceeds the sharing limit")]
     OutputTooLarge,

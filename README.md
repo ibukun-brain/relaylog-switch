@@ -16,34 +16,60 @@ hard to review together after the incident.
 ## Solution
 
 Relaylog exports a completed session as JSONL. This repository reads that
-supported export, validates its order and completeness, applies an explicit
-sharing boundary, and prepares structured evidence for an agent. Switch gives
-the human and an existing coding agent a shared room to discuss the evidence
-and draft a runbook.
+supported export, validates its structure and order, reports capture loss,
+applies an explicit sharing boundary, and prepares structured evidence for an
+agent. Switch gives the human and an existing coding agent a shared room to
+discuss the evidence and draft a runbook.
 
 The local demo is deterministic and uses fictional records. It does not call an
 LLM or upload evidence.
 
 ## Architecture
 
-```text
-Private Relaylog recorder
-        │ relaylog export <session-directory>
-        ▼
-      JSONL ──► relaylog-switch library ──► incident-room CLI
-                                                │
-                                      explicit operator approval
-                                                ▼
-                                  Switch-connected coding agent
-                                                │
-                                      shared room discussion
+```mermaid
+flowchart LR
+  recorder[Private Relaylog recorder] -->|supported JSONL export| parser[Bounded evidence parser]
+  parser --> timeline[Privacy-filtered timeline]
+  timeline --> cli[incident-room CLI]
+  cli -->|explicit session authorization| agent[Existing Switch-connected agent]
+  human[Human investigator] <--> room[Switch room]
+  agent <--> room
+  room -. collaboration interface configured outside this repository .-> discord[Discord]
 ```
 
 The public workspace consumes only the supported JSONL export. It has no Cargo
-path or Git dependency on Relaylog, never reads the encrypted spool, and does
-not expose a live subscription API. The current export supplies ordered spool
-offsets and capture records; it does not supply a session ID or wall-clock
-timestamps. Offsets are local evidence references, not global event IDs.
+path or Git dependency on Relaylog and never reads the encrypted spool. The
+outer capture export remains unversioned; the verified agent payload inside
+`record.type = "agent"` uses schema version 1. Agent events carry Relaylog
+session IDs, event IDs, source observation times, actor/provider attribution,
+correlation IDs, reported commands, outcomes, file paths, and coverage status.
+Legacy shell records remain supported and retain unknown actor attribution.
+Current shell-hook actor/source metadata is preserved when present, including
+an explicit unknown actor. The serialized timeline reports a conservative
+capture assessment: positive loss or partial-coverage signals are
+`known_incomplete`; an export without a detected gap remains `unverified`,
+because a clear footer is not a completeness attestation. Spool offsets are
+export-local references, not globally unique event IDs. This repository does
+not implement a Switch or Discord client.
+
+## Agent-Aware Evidence Compatibility
+
+`incident-room inspect --jsonl <file> --authorize-sharing` returns a bounded
+JSON evidence bundle with a unified human/agent timeline. `incident-room query`
+provides a read-only, authorization-gated timeline, event, provider, failure,
+and file-operation query for an existing Switch-connected coding agent to run.
+No MCP server or separate Discord bot is added. Unknown event variants and
+unsupported agent payload versions remain reference-only. Capture loss,
+partial provider coverage, and duplicate/conflicting event IDs remain visible.
+
+The parser follows the Relaylog core's versioned provider-neutral agent payload
+v1 nested in the existing capture JSONL wrapper. The checked core currently
+contains a Codex adapter; Claude Code and Gemini CLI payloads are not claimed as
+recorded until their adapters emit this same normalized contract. The fixture
+is synthetic and authored against the verified serialization shape; validating
+it against a freshly exported file from the updated private binary remains an
+end-to-end compatibility task. The separate versioned terminal control-frame
+fixture is not treated as a JSONL export.
 
 ## Quick Start
 
@@ -78,6 +104,26 @@ cargo run -p incident-room -- inspect --jsonl /path/to/session.jsonl
 cargo run -p incident-room -- inspect --jsonl /path/to/session.jsonl --authorize-sharing
 ```
 
+Query agent-attributed activity, a single event reference, reported failures,
+or file operations. All detailed queries require explicit sharing approval and
+return at most 500 records:
+
+```bash
+cargo run -p incident-room -- query --jsonl /path/to/session.jsonl \
+  --agent-provider openai --authorize-sharing
+cargo run -p incident-room -- query --jsonl /path/to/session.jsonl \
+  --file-operations --authorize-sharing
+cargo run -p incident-room -- query --jsonl /path/to/session.jsonl \
+  --tool-invocation call_123 --offset 0 --limit 100 --authorize-sharing
+cargo run -p incident-room -- query --jsonl /path/to/session-a.jsonl \
+  --jsonl /path/to/session-b.jsonl --event session-2/offset-128 \
+  --authorize-sharing
+```
+
+Repeated `--jsonl` inputs combine up to eight sessions for that query only.
+References use temporary `session-N/offset-N` names in input order; this is not
+a persisted Switch-room/session mapping.
+
 For the optional Relaylog CLI path, the application invokes `relaylog export`
 with separate process arguments and no shell. Sharing authorization is
 required before the output bundle is prepared:
@@ -85,6 +131,16 @@ required before the output bundle is prepared:
 ```bash
 cargo run -p incident-room -- investigate \
   --session /path/to/session-directory \
+  --authorize-sharing
+```
+
+If Relaylog is a local Cargo build and is not on `PATH`, pass its executable
+explicitly:
+
+```bash
+cargo run -p incident-room -- investigate \
+  --session /path/to/session-directory \
+  --relaylog-bin /path/to/relaylog/target/debug/relaylog \
   --authorize-sharing
 ```
 
@@ -97,11 +153,45 @@ operator's terminal to a protected temporary JSONL file and use `inspect`
 instead. The Incident Room subprocess closes stdin and cannot receive a
 passphrase through standard input.
 
+## Codex Hook Shortcuts
+
+Relaylog core owns Codex hook installation and recording. The Makefile here
+only shortens CLI commands; it does not build or download the private recorder.
+Install a Relaylog binary that supports Codex hooks, then set `RELAYLOG` to its
+path if it is not on `PATH`:
+
+```bash
+make hooks-install RELAYLOG=/path/to/relaylog
+make record RELAYLOG=/path/to/relaylog CAPTURE=metadata
+# In the Relaylog shell, run:
+codex
+# In Codex, review and trust the Relaylog handlers with /hooks.
+# From the Relaylog shell, check attachment with:
+make status
+```
+
+When the recording ends, `make record` prints the session directory again so
+you can pass it to `make export` without having to find it in startup output.
+
+`HOOK_SCOPE=user` is the default. Set `HOOK_SCOPE=project` while in the target
+project to install project-scoped hooks. `CAPTURE=metadata` is the default;
+Relaylog core also supports `commands` and `file-paths` capture levels. For an
+explicitly attached Codex process or to export a completed session:
+
+```bash
+make attach RELAYLOG=/path/to/relaylog SESSION_DIR=/path/to/active-session
+make export RELAYLOG=/path/to/relaylog SESSION_DIR=/path/to/session OUT=session.jsonl
+make investigate RELAYLOG=/path/to/relaylog SESSION_DIR=/path/to/session AUTHORIZE_SHARING=yes
+make hooks-uninstall RELAYLOG=/path/to/relaylog
+```
+
 ## Switch Workflow
 
 The intended workflow uses a coding agent already supported by Switch Console.
 The agent runs `incident-room` from this repository after the human approves a
-specific session. Setup and the agent's operating instructions are in
+specific session. It can invoke the CLI as a normal read-only local tool; this
+repository has no MCP service, room API client, Discord handler, or persistent
+room/session mapping. Setup and the agent's operating instructions are in
 [`switch/README.md`](switch/README.md) and
 [`switch/agents/incident-investigator.md`](switch/agents/incident-investigator.md).
 
@@ -113,7 +203,8 @@ room before describing the workflow as a completed integration.
 
 - The main Relaylog recorder and server are proprietary and are not included.
 - JSONL records are untrusted input. Parsing is bounded, validates the final
-  capture-gap summary, and rejects missing, truncated, or incomplete evidence.
+  capture-gap summary, and rejects malformed or missing-summary exports. A
+  valid export reporting dropped records or truncation is labeled incomplete.
 - Private-mode intervals and their markers are omitted. Inconsistent or
   unclosed intervals fail closed.
 - Terminal input is never shared. Terminal output is omitted unless the

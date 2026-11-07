@@ -19,22 +19,45 @@ cargo run -p incident-room -- demo \
 ```
 
 The scenario premise and database-pool hypothesis are labeled as synthetic.
-The JSONL contains shell command metadata and exit statuses only. It does not
-contain actual API responses, container logs, database output, or timestamps.
-The report therefore does not claim that the HTTP error or its cause was
-verified by the fixture.
+The JSONL contains legacy shell command metadata and exit statuses only. It does
+not contain actual API responses, container logs, database output, timestamps,
+actor IDs, or AI-provider events. It does not demonstrate that Codex, Claude
+Code, or Gemini performed any recorded action. The report therefore does not
+claim that the HTTP error or its cause was verified by the fixture.
+
+## Agent-aware fixture replay
+
+The second fixture mirrors the Relaylog core's nested agent payload v1 and
+contains fictional Codex hook events alongside legacy shell activity. It
+demonstrates mixed actor attribution, provider-session/tool-call correlation,
+an agent-reported file operation, and partial-coverage limitations. It does not
+claim that a real agent executed those events, and its shape still needs a
+fresh export compatibility check against the updated private Relaylog binary.
+
+```bash
+cargo run -p incident-room -- inspect \
+  --jsonl examples/api-incident/agent-aware-session.jsonl \
+  --authorize-sharing
+cargo run -p incident-room -- query \
+  --jsonl examples/api-incident/agent-aware-session.jsonl \
+  --agent-provider openai --authorize-sharing
+cargo run -p incident-room -- query \
+  --jsonl examples/api-incident/agent-aware-session.jsonl \
+  --file-operations --authorize-sharing
+```
 
 ## Switch walkthrough
 
 1. Set up a Switch room with the existing coding-agent workflow in
    [`../switch/README.md`](../switch/README.md).
-2. Ask the agent to inspect the synthetic fixture and cite IDs such as
-   `offset-4` in the draft.
-3. Point out that the command and exit status are observed metadata, while the
-   HTTP 500 and database pool exhaustion are synthetic scenario context.
+2. Ask the agent to inspect the agent-aware fixture and cite `offset-4`,
+   `offset-128`, and `offset-192`.
+3. Check that the Codex activity is identified as provider-reported, the
+   legacy shell actor remains unknown, the file event contains paths but no
+   file contents, and partial coverage is visible.
 4. Ask the human participant to challenge the hypothesis and request missing
    evidence before any conclusion is called verified.
-5. Show the `Human Review Status` remains `Not reviewed by a human`.
+5. Show the `Human Review Status` remains a draft not reviewed by a human.
 
 ## Short recording outline
 

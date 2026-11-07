@@ -118,15 +118,24 @@ fn data_after_the_final_capture_summary_is_rejected() {
 }
 
 #[test]
-fn reported_capture_loss_is_rejected() {
+fn reported_capture_loss_is_preserved_for_explicitly_labeled_analysis() {
     let jsonl = concat!(
         "{\"spool_offset\":4,\"record\":{\"type\":\"shell\",\"event\":{\"type\":\"started\"}}}\n",
         "{\"type\":\"capture_gaps\",\"counts\":{\"queue_dropped_records\":1,\"capacity_dropped_records\":0},\"truncated_at\":null}\n"
     );
 
-    let error = load_jsonl(Cursor::new(jsonl)).expect_err("loss makes the timeline incomplete");
+    let session = load_jsonl(Cursor::new(jsonl))
+        .expect("a complete JSONL file may accurately report lost capture events");
 
-    assert!(matches!(error, ExportError::EvidenceLoss));
+    assert_eq!(session.capture_gaps().queue_dropped_records(), 1);
+    assert_eq!(
+        session
+            .summary()
+            .expect("content-free summary")
+            .capture_gaps()
+            .queue_dropped_records(),
+        1
+    );
 }
 
 #[test]

@@ -1,4 +1,5 @@
 /target/
+/.codex/
 /evidence/
 /private-evidence/
 /.env
