@@ -7,19 +7,19 @@ Use the importable agent template at
 In Switch Console, open **Templates**, choose **Import template**, and select
 that YAML file. Then use the imported template and set:
 
-1. **Provider** to Codex.
-2. **Location** to the machine where the Codex provider can run the adapter.
-3. **Working directory** to this repository on that machine.
-4. **Existing Switch room** to the room bridged to your Discord incident
-   channel.
-5. Keep the suggested agent name `relaylogaiagent-v2`, or choose another
-   unused name.
+1. **Messaging app** to Discord.
+2. **Agent machine** to a Switch-connected machine with Codex installed and
+   signed in.
+3. **Relaylog checkout** to this repository on that machine.
+4. Choose a room name and keep the suggested agent identifier, or choose
+   another unused identifier.
 
-The template creates a new agent and adds it to the selected room. It does not
-rewrite the existing `relaylogAIagent`. After confirming the new agent works,
-remove the old agent from that room or direct mentions to the new agent so the
-stale instructions are no longer used. If you want to keep the original name,
-rename or remove the old agent in Switch Console before using the template.
+The template explicitly sets the provider to Codex and creates a new
+Switch room bridged to the selected messaging app, with the new agent and
+template user in it. It does not rewrite the existing `relaylogAIagent` or add
+the new agent to an existing room. Add the other Discord participants to the
+new room after creation. If you need to keep using an existing room, add or
+edit the agent manually using the instructions below.
 
 The working directory and Relaylog session must be reachable from the selected
 agent runtime. A Windows-hosted provider does not automatically get access to
@@ -28,8 +28,8 @@ in that WSL distribution, run the approved adapter command in WSL and attach
 its JSON bundle to the room. The template does not grant access to Relaylog's
 encrypted spool or upload evidence itself.
 
-The template follows Switch's YAML template format and creates an agent that
-joins an existing room; it does not create a separate Discord bot or room. See
+The template follows Switch's YAML template format and creates a bridged room;
+it does not create a separate Discord bot. See
 the [Switch template language reference](https://github.com/sandbox-quantum/switch/blob/main/docs/TEMPLATES.md)
 for the supported template fields.
 

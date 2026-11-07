@@ -1,38 +1,38 @@
 version: 1
 
 params:
+  bridge:
+    type: bridge
+    label: Messaging app
+    default: [$first]
+  room_name:
+    type: string
+    label: Incident room name
+    default: Relaylog Incident Room
   agent_name:
     type: string
-    label: Agent name
-    description: Use a new name so this template does not collide with an existing agent.
-    default: relaylogaiagent-v2
+    label: Agent identifier
+    description: Lowercase letters, numbers, dots, hyphens, or underscores.
+    default: relaylog-incident-agent
     pattern: '^[a-z0-9][a-z0-9._-]*$'
-  provider:
-    type: provider
-    label: Coding agent provider
-    default: [codex]
-  location:
-    type: location
-    label: Run location
-    default: local
+  machine:
+    type: machine
+    label: Agent machine
+    description: Choose a Switch-connected machine with Codex installed and signed in.
+    default: [$first]
     input: ask
   directory:
     type: directory
-    label: Working directory
-    description: Select the relaylog-switch checkout on the machine where the provider runs.
-  switch_room:
-    type: room
-    label: Existing Switch room
-    description: Select the existing room bridged to the Discord incident channel.
+    label: Relaylog checkout
+    description: Local working directory containing this Relaylog repository.
 
 agent:
   name: "{agent_name}"
   display_name: Relaylog AI Investigator
   description: Investigates operator-approved Relaylog exports and drafts evidence-backed incident reports.
-  provider: "{provider}"
-  location: "{location}"
+  provider: codex
+  machine: "{machine}"
   directory: "{directory}"
-  join: ["{switch_room}"]
   addressing: anyone
   auto_mode: true
   auto_approve: false
@@ -110,3 +110,9 @@ agent:
       future actions separate from recorded actions.
     - Keep every report a draft until an authorized human reviews and approves
       it. Never publish or execute a runbook automatically.
+
+room:
+  name: "{room_name}"
+  bridge: "{bridge}"
+  agents: ["{agent_name}"]
+  users: ["{$creator}"]
