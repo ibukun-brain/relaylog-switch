@@ -113,6 +113,7 @@ agent:
 
 room:
   name: "{room_name}"
+  description: Collaborative incident investigation using operator-approved Relaylog evidence.
   bridge: "{bridge}"
   agents: ["{agent_name}"]
   users: ["{$creator}"]
