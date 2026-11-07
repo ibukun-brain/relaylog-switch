@@ -59,6 +59,16 @@ cargo run -p incident-room -- query \
    evidence before any conclusion is called verified.
 5. Show the `Human Review Status` remains a draft not reviewed by a human.
 
+## WSL recording and Discord transcript
+
+For the full live-terminal-to-Codex-TUI-to-Discord walkthrough, including the
+`--relaylog-bin` path for a local Relaylog build, the metadata-only bundle
+export, WSL attachment path, and teammate transcript, follow
+[`orders-api-production-simulation.md`](../examples/api-incident/orders-api-production-simulation.md).
+The live recording's coverage must be read from its attached bundle; the
+synthetic fixture's stable event references must not be presented as events
+from that live session.
+
 ## Short recording outline
 
 1. State the incident and show the human and Switch agent in the shared room.

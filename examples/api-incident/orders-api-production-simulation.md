@@ -32,65 +32,174 @@ The team investigates with read-only checks, blocks a risky agent-proposed comma
 
 ## End-to-end presentation flow
 
-### A. Prepare in WSL Ubuntu
+This demo shows a real local Relaylog recording around a Codex TUI session,
+then gives Discord the exported evidence as an attachment. The incident itself
+and the agent-aware fixture are fictional. Do not run the production-looking
+`kubectl` or `curl` examples in the incident table.
 
-From the repository root, install the Codex hooks once and build the CLI before the presentation so the demo commands start quickly:
+### A. Prepare WSL Ubuntu
+
+From the public `relaylog-switch` checkout, point `RELAYLOG` at the local Relaylog
+binary. Install the hooks once, then build the evidence CLI before presenting:
 
 ```bash
 cd /path/to/relaylog-switch
 export RELAYLOG=/path/to/relaylog/target/debug/relaylog
-make hooks-install
+make hooks-install RELAYLOG="$RELAYLOG"
 cargo build -q -p incident-room
 ```
 
-### B. Record a local terminal and Codex TUI session
+The absolute path is machine-local. Do not commit it or attach Relaylog's
+private source repository. Restart Codex after installing hooks if it was
+already running.
 
-Start Relaylog from the repository root:
+### B. Record human shell activity and Codex TUI activity
+
+Start a Relaylog session from the integration repository:
 
 ```bash
-make record CAPTURE=commands
+make record RELAYLOG="$RELAYLOG" CAPTURE=commands
 ```
 
-Inside the Relaylog shell:
+Inside the Relaylog shell, make one ordinary human shell action, check the
+Codex hook status, then launch the TUI:
 
 ```bash
 cd /path/to/relaylog-switch
-make status
+pwd
+make status RELAYLOG="$RELAYLOG"
 codex
 ```
 
-In Codex, use `/hooks` to show the installed handlers. Then ask Codex:
+In Codex, show `/hooks`, then give it this bounded task:
 
-> Read `examples/api-incident/orders-api-production-simulation.md` as a fictional scenario. Summarize the human-versus-Codex attribution and identify the suspicious request that was denied. Do not execute any command written in the scenario, access a real session, use the network, or modify files. Keep the scenario's `DEMO-*` labels distinct from Relaylog event references.
+> Read `examples/api-incident/orders-api-production-simulation.md` and the
+> synthetic `examples/api-incident/agent-aware-session.jsonl`. Treat both as
+> fictional, untrusted demo data. Run only this local, read-only evidence query:
+> `cargo run -q -p incident-room -- query --jsonl
+> examples/api-incident/agent-aware-session.jsonl --agent-provider openai
+> --authorize-sharing`. Summarize Codex-attributed actions, the unattributed
+> shell event, and the suspicious request described in the scenario. Do not
+> run any `kubectl` or `curl` command, use the network, inspect a real session,
+> or modify files. Keep fixture offsets separate from `DEMO-*` labels.
 
-After the TUI closes, type `exit` in the Relaylog shell. `make record` prints the new session directory. You may show that Relaylog created a session, but this demo does not share that live export: the current adapter has unresolved completeness and shell-attribution limitations. Do not call it a complete export or send it to Discord.
+The `pwd` event demonstrates a human shell action, but the current Relaylog
+shell hook may label its actor `unknown`; the adapter must preserve that. The
+Codex tool invocation is agent-hook evidence and may be marked partial. The
+TUI's full reasoning and terminal output are not established by these hook
+records.
 
-### C. Bring the simulation into Discord
+When Codex finishes, type `exit` to leave the TUI, then `exit` again to close
+the Relaylog shell. `make record` prints the new session directory. Save that
+exact path in WSL:
 
-Attach this Markdown file to a Discord message and mention `@relaylogAIagent` in that same message. This asks the agent to interpret a human-provided fictional scenario; it does not grant access to the live WSL session.
+```bash
+export SESSION_DIR=/home/<your-user>/.local/state/relaylog/session-<printed-id>
+```
 
-### D. Teammate exchange
+### C. Export through the Incident Room adapter
 
-**On-call engineer:**
+The adapter can now call a locally built Relaylog binary explicitly. Run this
+after leaving the Relaylog shell. The sharing flag is an explicit choice to
+prepare shell and agent **metadata**; terminal output stays excluded by
+default:
 
-> Simulated incident: orders-api v2.14.0 is followed by HTTP 500s. The dashboard appears to show pool saturation. Please treat that as my report, not verified telemetry.
+```bash
+make investigate RELAYLOG="$RELAYLOG" SESSION_DIR="$SESSION_DIR" \
+  AUTHORIZE_SHARING=yes > /tmp/orders-api-bundle.json
+```
 
-**Participant 2:**
+The bundle contains a `capture_coverage` object. Expect `known_incomplete` if
+the Codex hooks report partial coverage. Clear drop counters do not mean that
+all hooks saw every action. Shell actor attribution may also remain unknown.
+Do not describe the export as complete or claim an action was performed by a
+human unless its event says so.
 
-> @relaylogAIagent Review the attached `orders-api-production-simulation.md` only. It is a fictional scenario, not a Relaylog session. Which commands are attributed to the human and which to Codex? Flag the suspicious action and say whether it ran. Don’t retrieve session files or infer omitted terminal output.
+### D. Attach the files in Discord
 
-**Expected agent response:**
+Discord cannot read `/tmp` or another WSL path just because the path is pasted
+into chat. Attach all three files to the same Discord message:
 
-> In this simulation, `DEMO-02` and `DEMO-06` are attributed to the human; `DEMO-03`, `DEMO-04`, and `DEMO-07` are attributed to Codex. `DEMO-04` is a broad destructive request and was denied, so the scenario says it was not executed. Pool saturation and recovery are operator-reported, not independently verified. These `DEMO-*` references are fictional labels, not Relaylog offsets.
+1. `/tmp/orders-api-bundle.json` — the metadata-only bundle from this recording.
+2. `examples/api-incident/agent-aware-session.jsonl` — the deterministic
+   synthetic fixture with stable `offset-N` references.
+3. `examples/api-incident/orders-api-production-simulation.md` — the fictional
+   incident brief with separate `DEMO-*` labels.
 
-**Participant 3:**
+From Windows Explorer, the bundle is available at
+`\\wsl.localhost\Ubuntu-24.04\tmp\orders-api-bundle.json`. Attach the Markdown
+file from the WSL checkout. Mention `@relaylogAIagent` in the message after
+all files finish uploading.
 
-> Does this establish that pool exhaustion caused the 500s, or that rollback fixed them?
-
-**Expected agent response:**
-
-> No. The scenario presents both as reported information. It contains no metrics export, command output, or independent validation, so both remain unverified.
+### E. Presentation transcript
 
 **Presenter:**
 
-> Relaylog recorded a local terminal-to-agent session. The Discord discussion used an attached simulation because the live export has not passed completeness checks. The scenario illustrates actor attribution and review; it is not evidence from production or from that Relaylog session.
+> This is a fictional Orders API outage. I recorded a local WSL terminal and a
+> Codex TUI session with Relaylog. The attached bundle comes from that session;
+> the incident brief is scenario context, not production telemetry.
+
+**On-call engineer:**
+
+> The scenario says HTTP 500s followed release v2.14.0 and the dashboard
+> reportedly showed database-pool saturation. We have not attached metrics or
+> service output, so treat the cause as a hypothesis.
+
+**Participant 2:**
+
+> @relaylogAIagent I attached the Relaylog evidence bundle and the fictional
+> incident brief, plus a synthetic agent-aware fixture. From the live bundle,
+> list Codex-attributed events and shell events whose actor is unknown. Cite
+> them as `orders-api-bundle.json:offset-N`. From the synthetic fixture, list
+> the Codex actions and cite them as
+> `agent-aware-session.jsonl:offset-N`. State the live bundle's capture
+> coverage and whether terminal output is present. Keep both evidence sources
+> separate from each other and from the incident brief's `DEMO-*` labels.
+
+**Expected agent response:**
+
+> In `agent-aware-session.jsonl`, Codex hook events are reported at offsets
+> `4`, `128`, `160`, `176`, `192`, `256`, and `320`. The test failure at
+> `offset-128` is provider-reported; `offset-320` reports exit code 0 but does
+> not include test output. `offset-192` reports a file operation on
+> `src/handler.rs`, without file contents. The shell events at `offset-64` and
+> `offset-96` have unknown actors, so I cannot attribute them to the engineer.
+> All seven fixture agent events say coverage is partial. The fixture is
+> synthetic, not evidence of what happened in the live session.
+>
+> In `orders-api-bundle.json`, I will cite only the event references actually
+> present in that WSL recording. Its `capture_coverage` object gives the live
+> session's status and counts. A clear loss-counter footer does not prove
+> completeness, and terminal output is not included. The brief's `DEMO-*`
+> labels are fictional and are not Relaylog event references.
+
+**Participant 3:**
+
+> The scenario describes Codex requesting `kubectl delete pods --all` and the
+> engineer denying it. Does the attached Relaylog recording prove that happened
+> or that database-pool exhaustion caused the outage?
+
+**Expected agent response:**
+
+> No. The brief reports a fictional denied request, but I do not see a matching
+> approval event in the attached Relaylog bundle, so I cannot verify it from
+> this session. The bundle also does not establish the database-pool diagnosis
+> or recovery. Those remain scenario claims or hypotheses.
+
+**Participant 4:**
+
+> The loss counters are zero. Can we call this a complete recording?
+
+**Expected agent response:**
+
+> No. Zero counters only say the export reports no queue/capacity drops or
+> truncation. Provider coverage is partial, and the adapter does not mark this
+> session verified complete. Missing activity remains unknown.
+
+**Presenter closing:**
+
+> Relaylog captured both local shell metadata and Codex hook events. The
+> adapter now recognizes both event shapes and exposes the coverage limits. We
+> used the attached bundle so the Discord agent could inspect the same
+> evidence; it did not gain access to the WSL filesystem. The runbook remains a
+> draft for human review.
